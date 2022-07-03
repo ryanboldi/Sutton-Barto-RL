@@ -3,7 +3,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 def softmax(x, temp):
-    return np.exp(x/temp) / np.sum(np.exp(x/temp))
+    x= np.array(x)
+    return np.exp(x/temp) / np.sum(np.exp(x / temp))
 
 class NArmedBandit:
     def __init__(self, n, mean, sd, sample_noise):
@@ -58,12 +59,13 @@ class EpGreedy(Solver):
         self.add_observation(move_to_make, sampled_val)
 
 class softMax(Solver):
-    def __init__(self, n, bandit):
+    def __init__(self, n, temp, bandit):
         super().__init__(n, bandit)
+        self.temp = temp
     
     def make_move(self):
         #pick the move to make
-        sm = softmax(list(map(self.get_sample_avg, range(0, self.n))))
+        sm = softmax(list(map(self.get_sample_avg, range(0, self.n))), temp=self.temp)
         move_to_make = np.random.choice(list(range(0, self.n)), p=sm)
         
         #make the move
@@ -77,32 +79,27 @@ class softMax(Solver):
 
 fig, ax = plt.subplots()  # Create a figure containing a single axes.
 
-ep01_rewards = []
-ep001_rewards = []
-ep1_rewards = []
-s_rewards = []
+s1_rewards = []
+s01_rewards = []
+s001_rewards = []
 for j in range(0, 2000):
     b = NArmedBandit(10, 0, 1, 1)
-    e01 = EpGreedy(10, 0.1, b)
-    e001 = EpGreedy(10, 0.01, b)
-    e1 = EpGreedy(10, 0, b)
-    s = softMax(10, b)
+    s1 = softMax(10, 1, b)
+    s01 = softMax(10, 0.1, b)
+    s001 = softMax(10, 0.01, b)
     print(j)
     for i in range(0, 1000):
-        e01.make_move()
-        e001.make_move()
-        e1.make_move()
-        s.make_move()
-    ep01_rewards.append(e01._rewards_collected)
-    ep001_rewards.append(e001._rewards_collected)
-    ep1_rewards.append(e1._rewards_collected)
-    s_rewards.append(s._rewards_collected)
+        s1.make_move()
+        s01.make_move()
+        s001.make_move()
+    s1_rewards.append(s1._rewards_collected)
+    s01_rewards.append(s01._rewards_collected)
+    s001_rewards.append(s001._rewards_collected)
 
 plt.title("n-armed-bandit, n=10, Q*(a)~N(0, 1), Q_t(a)~N(Q*(a), 1)")
-plt.plot(np.mean(ep01_rewards, 0), label="Epsilon = 0.1")
-plt.plot(np.mean(ep001_rewards, 0), label="Epsilon = 0.01")
-plt.plot(np.mean(ep1_rewards, 0), label="Epsilon = 0 (greedy)")
-plt.plot(np.mean(s_rewards, 0), label="Softmax")
+plt.plot(np.mean(s1_rewards, 0), label="Softmax (T = 1)")
+plt.plot(np.mean(s01_rewards, 0), label="Softmax T=0.1")
+plt.plot(np.mean(s001_rewards, 0), label="Softmax T=0.01")
 plt.legend()
 plt.show()
 
