@@ -17,6 +17,21 @@ class NArmedBandit:
     def sample_val(self, i):
         return np.random.normal(self.true_values[i], self.sample_noise)
 
+
+class MovingNArmedBandit(NArmedBandit):
+    def __init__(self, n, mean, sd, sample_noise, move_sd):
+        super().__init__(n, mean, sd, sample_noise)
+        self.move_sd = move_sd
+    
+    def sample_val(self, i):
+        #print(self.true_values[i])
+        return np.random.normal(self.true_values[i], self.sample_noise)
+        
+
+    def random_walk(self):
+        for i in range(len(self.true_values)):
+            self.true_values[i] += np.random.normal(0, self.move_sd)
+
 class Solver:
     def __init__(self, n, bandit):
         self.n = n
@@ -35,6 +50,22 @@ class Solver:
 
     def add_observation(self, i, val):
         self.vals[i].append(val)
+
+class incrementalSolver(Solver):
+    def __init__(self, n, bandit):
+        super().__init__(n, bandit)
+        self.vals = [{'k': 0, 'Qk': 0} for _ in range(n)]
+    
+     #returns the sample average value of the previously seen predicitons
+    def get_sample_avg(self, i):
+        return self.vals[i]['Qk']
+
+    def add_observation(self, i, val):
+        qk = self.vals[i]['Qk']
+        k = self.vals[i]['k']
+
+        self.vals[i]['Qk'] = qk + (1/(k+1))*(val - qk)
+        self.vals[i]['k'] += 1
 
 class EpGreedy(Solver):
     def __init__(self, n, Ep, bandit):
@@ -76,31 +107,81 @@ class softMax(Solver):
         #print(move_to_make)
         self.add_observation(move_to_make, sampled_val)
 
+class incrementalEpGreedySampleAvg(incrementalSolver):
+    def __init__(self, n, Ep, bandit):
+        super().__init__(n, bandit)
+        self.Ep = Ep
+
+    def make_move(self):
+        #decide if explore or exploit
+        if (np.random.random() > self.Ep):
+            #exploit - Take the move with the highest sample_avg_score
+            move_to_make = np.argmax(list(map(self.get_sample_avg, range(0, self.n))), 0)
+        else:
+            #explore
+            move_to_make = np.random.randint(0, self.n)
+        
+        #make the move
+        #sample the chosen index, add to observations
+        sampled_val = self.bandit.sample_val(move_to_make)
+        self._total_reward += sampled_val
+        self._rewards_collected.append(sampled_val)
+        #print(move_to_make)
+        self.add_observation(move_to_make, sampled_val)
+
+class incrementalEpGreedyConstantWeight(incrementalSolver):
+    def __init__(self, n, Ep, weight, bandit):
+        super().__init__(n, bandit)
+        self.Ep = Ep        
+        self.weight = weight
+
+    def make_move(self):
+        #decide if explore or exploit
+        if (np.random.random() > self.Ep):
+            #exploit - Take the move with the highest sample_avg_score
+            move_to_make = np.argmax(list(map(self.get_sample_avg, range(0, self.n))), 0)
+        else:
+            #explore
+            move_to_make = np.random.randint(0, self.n)
+        
+        #make the move
+        #sample the chosen index, add to observations
+        sampled_val = self.bandit.sample_val(move_to_make)
+        self._total_reward += sampled_val
+        self._rewards_collected.append(sampled_val)
+        #print(move_to_make)
+        self.add_observation(move_to_make, sampled_val)
+    
+    def add_observation(self, i, val):
+        qk = self.vals[i]['Qk']
+        k = self.vals[i]['k']
+
+        self.vals[i]['Qk'] = qk + self.weight*(val - qk)
+        self.vals[i]['k'] += 1
+
 
 fig, ax = plt.subplots()  # Create a figure containing a single axes.
 
-s1_rewards = []
-s01_rewards = []
-s001_rewards = []
-for j in range(0, 2000):
-    b = NArmedBandit(10, 0, 1, 1)
-    s1 = softMax(10, 1, b)
-    s01 = softMax(10, 0.1, b)
-    s001 = softMax(10, 0.01, b)
-    print(j)
-    for i in range(0, 1000):
-        s1.make_move()
-        s01.make_move()
-        s001.make_move()
-    s1_rewards.append(s1._rewards_collected)
-    s01_rewards.append(s01._rewards_collected)
-    s001_rewards.append(s001._rewards_collected)
+es01_rewards = []
+ea01_rewards = []
+for j in range(0, 200):
+    if (j%100 == 0): print(j)
+    #b = NArmedBandit(10, 0, 1, 1)
+    mb = MovingNArmedBandit(10, 0, 1, 1, 1)
+    es01 = incrementalEpGreedySampleAvg(10, 0.1, mb)
+    ea01 = incrementalEpGreedyConstantWeight(10, 0.1, 0.1, mb)
+    for i in range(0, 5000):
+        es01.make_move()
+        ea01.make_move()
+        mb.random_walk()
+    es01_rewards.append(es01._rewards_collected)
+    ea01_rewards.append(ea01._rewards_collected)
+    
 
-plt.title("n-armed-bandit, n=10, Q*(a)~N(0, 1), Q_t(a)~N(Q*(a), 1)")
-plt.plot(np.mean(s1_rewards, 0), label="Softmax (T = 1)")
-plt.plot(np.mean(s01_rewards, 0), label="Softmax T=0.1")
-plt.plot(np.mean(s001_rewards, 0), label="Softmax T=0.01")
+print(np.array(es01_rewards).shape)
+
+plt.title("n-armed-bandit, n=10, Q*(a)~N(0, 1), Q_t(a)~N(Q*(a), 1), moving+~N(0, 1)")
+plt.plot(np.mean(es01_rewards, 0), label="epsilon=0.1, sample average")
+plt.plot(np.mean(ea01_rewards, 0), label="epsilon=0.1, alpha=0.1")
 plt.legend()
 plt.show()
-
-#print(e._rewards_collected)
