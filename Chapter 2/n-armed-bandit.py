@@ -164,13 +164,13 @@ fig, ax = plt.subplots()  # Create a figure containing a single axes.
 
 es01_rewards = []
 ea01_rewards = []
-for j in range(0, 200):
+for j in range(0, 2000):
     if (j%100 == 0): print(j)
     #b = NArmedBandit(10, 0, 1, 1)
     mb = MovingNArmedBandit(10, 0, 1, 1, 1)
     es01 = incrementalEpGreedySampleAvg(10, 0.1, mb)
     ea01 = incrementalEpGreedyConstantWeight(10, 0.1, 0.1, mb)
-    for i in range(0, 5000):
+    for i in range(0, 1000):
         es01.make_move()
         ea01.make_move()
         mb.random_walk()
