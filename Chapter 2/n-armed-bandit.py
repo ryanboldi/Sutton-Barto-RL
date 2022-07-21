@@ -17,7 +17,6 @@ class NArmedBandit:
     def sample_val(self, i):
         return np.random.normal(self.true_values[i], self.sample_noise)
 
-
 class MovingNArmedBandit(NArmedBandit):
     def __init__(self, n, mean, sd, sample_noise, move_sd):
         super().__init__(n, mean, sd, sample_noise)
@@ -159,9 +158,39 @@ class incrementalEpGreedyConstantWeight(incrementalSolver):
         self.vals[i]['Qk'] = qk + self.weight*(val - qk)
         self.vals[i]['k'] += 1
 
+class referenceSolverSoftmax(Solver):
+    def __init__(self, n, bandit, ref_reward, alpha, beta, correction):
+        super().__init__(n, bandit)
+        self.prefs = [0 for _ in range(n)]
+        self.ref_reward = ref_reward
+        self.alpha = alpha
+        self.beta = beta
+        self.correction = correction
+    
+     #returns the sample average value of the previously seen predicitons
+    def get_sample_avg(self, i):
+        return self.prefs[i]
+
+    def add_observation(self, i, val):
+        if self.correction:
+            self.prefs[i] += self.beta*(val - self.ref_reward)*(1 - self.pi[i]) 
+        else:
+            self.prefs[i] += self.beta*(val - self.ref_reward)
+        self.ref_reward += self.alpha*(val - self.ref_reward) 
+
+    def make_move(self):
+        self.pi = softmax(list(map(self.get_sample_avg, range(0, self.n))), temp=1)
+        move_to_make = np.random.choice(list(range(0, self.n)), p=self.pi)
+        #sample the chosen index, add to observations
+        sampled_val = self.bandit.sample_val(move_to_make)
+        self._total_reward += sampled_val
+        self._rewards_collected.append(sampled_val)
+        #print(move_to_make)
+        self.add_observation(move_to_make, sampled_val)
+
 
 fig, ax = plt.subplots()  # Create a figure containing a single axes.
-
+""" 
 es01_rewards = []
 ea01_rewards = []
 for j in range(0, 2000):
@@ -176,12 +205,30 @@ for j in range(0, 2000):
         mb.random_walk()
     es01_rewards.append(es01._rewards_collected)
     ea01_rewards.append(ea01._rewards_collected)
-    
+ 
 
 print(np.array(es01_rewards).shape)
 
 plt.title("n-armed-bandit, n=10, Q*(a)~N(0, 1), Q_t(a)~N(Q*(a), 1), moving+~N(0, 1)")
 plt.plot(np.mean(es01_rewards, 0), label="epsilon=0.1, sample average")
 plt.plot(np.mean(ea01_rewards, 0), label="epsilon=0.1, alpha=0.1")
+"""
+bs_rewards = []
+es_rewards = []
+for j in range(0, 2000):
+    if (j % 100 == 0): print(j)
+    b = NArmedBandit(10, 0, 1, 1)
+    bs = referenceSolverSoftmax(10, b, -5, 0.1, 0.1, False)
+    es = referenceSolverSoftmax(10, b, -5, 0.1, 0.1, True)
+    for i in range(0, 1000):
+        bs.make_move()
+        es.make_move()
+    bs_rewards.append(bs._rewards_collected)
+    es_rewards.append(es._rewards_collected)
+
+plt.title("exercise 2.11 - low starting reference value")
+plt.plot(np.mean(bs_rewards, 0), label="no correction")
+plt.plot(np.mean(es_rewards, 0), label="correction")
+
 plt.legend()
 plt.show()
