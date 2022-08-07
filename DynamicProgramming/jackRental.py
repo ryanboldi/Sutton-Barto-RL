@@ -66,9 +66,19 @@ class rentalEnv1:
 
         rew -= 2*abs(action)
 
+        #free shuttle from location 1 to 2
+        if action > 1:
+            rew += 2
+
         #don't add cars beyond the limit
         carsLot1 = min(self.cars1, carsLot1 - action)
         carsLot2 = min(self.cars2, carsLot2 + action)
+
+        #other nonlinearity : parking lot full
+        if carsLot1 > 10:
+            rew -= 4
+        if carsLot2 > 10:
+            rew -= 4
 
         #iterate over all 4 random variables
         for rq1, prq1 in self.car1RequestPoisson.values.items():
@@ -163,5 +173,5 @@ plt.colorbar()
 ax = plt.gca()
 ax.invert_yaxis()
 
-plt.title("Jack's Car Rental Problem: 21 x 21, linear, theta=0.01, iterations=" + str(c))
+plt.title("Jack's Car Rental Problem: 21 x 21, non linear, theta=0.01, iterations=" + str(c))
 plt.show()
