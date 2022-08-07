@@ -1,9 +1,14 @@
+from cmath import inf
+
+import matplotlib.pyplot as plt
+import numpy as np
+
 from math import exp, factorial
 
 facts = [factorial(n) for n in range(0, 300)]
 
 class poisson:
-    def __init__(self, lmda, ep=0.001):
+    def __init__(self, lmda, ep=0.01):
         self.lmda = lmda
         self.ep = ep #values with prob less than this don't happen and are normalized out
         self.values = {}
@@ -56,13 +61,14 @@ class rentalEnv1:
                 self.stateValues[(i, j)] = 0
 
     def valueOfState(self, carsLot1, carsLot2, action):
+       # print("action: " + str(action))
         rew = 0
 
-        rew -= 2*action
+        rew -= 2*abs(action)
 
         #don't add cars beyond the limit
         carsLot1 = min(self.cars1, carsLot1 - action)
-        carsLot2 = min(self.cars2, carsLot1 + action)
+        carsLot2 = min(self.cars2, carsLot2 + action)
 
         #iterate over all 4 random variables
         for rq1, prq1 in self.car1RequestPoisson.values.items():
@@ -87,9 +93,10 @@ class rentalEnv1:
         return rew
 
     def policy_eval(self, policy):
-        theta = 50
+        theta = 0.01
         while(True):
             delta = 0
+            #print(policy.actions)
             for one in range(0, self.cars1 + 1):
                 for two in range(0, self.cars2 + 1):
                     val = self.stateValues[(one, two)]
@@ -109,29 +116,35 @@ class rentalEnv1:
             for two in range(0, self.cars2 + 1):
                 b = policy_copy[(one, two)]
                 
-                best_val = 0
-                best_act = None
+                best_val = -inf
+                best_act = 0
                 #find best action from all possible actions
-                for i in range(-min(two, 5), min(one, 5)):
+                for i in range(-min(two, 5), min(one, 5) + 1):
                     v = self.valueOfState(one, two, i)
                     if v > best_val:
-                        v = best_val
+                        best_val = v
                         best_act = i
                 policy_copy[(one, two)] = best_act
 
                 if b != policy_copy[(one, two)]:
                     policy_stable = False
         return policy_stable, policy_copy
-                
+
+def save_to_file(policy):
+    with open('./policy1.npy', 'wb+') as f:
+        np.save(f, np.array(policy))
+
 
 policy = rentalPolicy()
 env = rentalEnv1()
 
+c = 0
 while(True):
+    c += 1
     print(1)
     env.policy_eval(policy)
-    np, stop = env.policy_improvement(policy)
-    policy.actions = np
+    stop, newpolicy = env.policy_improvement(policy)
+    policy.actions = newpolicy
     if stop:
         break
 
@@ -141,9 +154,14 @@ for i in range(0, 21):
     for j in range(0, 21):
         policyPlot[i][j] = policy.actions[(i, j)]
 
-import matplotlib.pyplot as plt
-import numpy as np
 
-a = np.random.random((16, 16))
-plt.imshow(a, cmap='hot', interpolation='nearest')
+save_to_file(policyPlot)
+
+plt.imshow(policyPlot, cmap='hot', interpolation='nearest')
+plt.colorbar()
+
+ax = plt.gca()
+ax.invert_yaxis()
+
+plt.title("Jack's Car Rental Problem: 21 x 21, linear, theta=0.01, iterations=" + str(c))
 plt.show()
